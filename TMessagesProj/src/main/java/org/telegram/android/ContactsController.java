@@ -15,6 +15,7 @@ import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
@@ -203,6 +204,7 @@ public class ContactsController {
 
     public void checkAppAccount() {
         AccountManager am = AccountManager.get(ApplicationLoader.applicationContext);
+        Context apctx = ApplicationLoader.applicationContext;
         Account[] accounts;
         try {
             accounts = am.getAccountsByType("org.telegram.account");
@@ -220,7 +222,7 @@ public class ContactsController {
         if (UserConfig.isClientActivated()) {
             if (accounts.length == 1) {
                 Account acc = accounts[0];
-                if (!acc.name.equals(UserConfig.getCurrentUser().phone)) {
+                if (!acc.name.equals(apctx.getString(R.string.AppName))) {
                     recreateAccount = true;
                 } else {
                     currentAccount = acc;
@@ -240,7 +242,7 @@ public class ContactsController {
             }
             if (UserConfig.isClientActivated()) {
                 try {
-                    currentAccount = new Account(UserConfig.getCurrentUser().phone, "org.telegram.messenger");
+                    currentAccount = new Account(apctx.getString(R.string.AppName), "org.telegram.messenger");
                     am.addAccountExplicitly(currentAccount, "", null);
                 } catch (Exception e) {
                     FileLog.e("tmessages", e);
