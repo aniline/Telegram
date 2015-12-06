@@ -1,5 +1,5 @@
 /*
- * This is the source code of Telegram for Android v. 2.x.x.
+ * This is the source code of Telegram for Android v. 3.x.x.
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
@@ -31,6 +31,7 @@ import android.view.View;
 import android.view.ViewAnimationUtils;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
@@ -39,12 +40,12 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import org.telegram.android.AndroidUtilities;
-import org.telegram.android.AnimationCompat.AnimatorListenerAdapterProxy;
-import org.telegram.android.AnimationCompat.AnimatorSetProxy;
-import org.telegram.android.AnimationCompat.ObjectAnimatorProxy;
-import org.telegram.android.AnimationCompat.ViewProxy;
-import org.telegram.android.LocaleController;
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AnimationCompat.AnimatorListenerAdapterProxy;
+import org.telegram.messenger.AnimationCompat.AnimatorSetProxy;
+import org.telegram.messenger.AnimationCompat.ObjectAnimatorProxy;
+import org.telegram.messenger.AnimationCompat.ViewProxy;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
 import org.telegram.ui.Components.LayoutHelper;
@@ -55,6 +56,7 @@ public class BottomSheet extends Dialog {
 
     private LinearLayout containerView;
     private FrameLayout container;
+    private Object lastInsets;
 
     private boolean dismissed;
     private int tag;
@@ -69,6 +71,8 @@ public class BottomSheet extends Dialog {
     private boolean isGrid;
     private ColorDrawable backgroundDrawable = new ColorDrawable(0xff000000);
     private static Drawable shadowDrawable;
+
+    private boolean focusable;
 
     private Paint ciclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -193,10 +197,11 @@ public class BottomSheet extends Dialog {
         }
     }
 
-    public BottomSheet(Context context) {
+    public BottomSheet(Context context, boolean needFocus) {
         super(context);
 
         container = new FrameLayout(getContext()) {
+
             @Override
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                 int width = MeasureSpec.getSize(widthMeasureSpec);
@@ -225,7 +230,12 @@ public class BottomSheet extends Dialog {
                     if (child.getVisibility() == GONE || child == containerView) {
                         continue;
                     }
-                    measureChildWithMargins(child, widthMeasureSpec, 0, heightMeasureSpec, 0);
+                    if (lastInsets != null && Build.VERSION.SDK_INT >= 21) {
+                        WindowInsets wi = (WindowInsets) lastInsets;
+                        wi = wi.replaceSystemWindowInsets(wi.getSystemWindowInsetLeft(), wi.getSystemWindowInsetTop(), 0, wi.getSystemWindowInsetBottom());
+                        child.dispatchApplyWindowInsets(wi);
+                    }
+                    measureChildWithMargins(child, MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), 0, MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY), 0);
                 }
             }
 
@@ -296,6 +306,20 @@ public class BottomSheet extends Dialog {
             }
         });
         container.setBackgroundDrawable(backgroundDrawable);
+        focusable = needFocus;
+        if (Build.VERSION.SDK_INT >= 21 && !focusable) {
+            container.setFitsSystemWindows(true);
+            container.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @SuppressLint("NewApi")
+                @Override
+                public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                    lastInsets = insets;
+                    container.requestLayout();
+                    return insets.consumeSystemWindowInsets();
+                }
+            });
+            container.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        }
     }
 
     @Override
@@ -418,15 +442,17 @@ public class BottomSheet extends Dialog {
         }
 
         WindowManager.LayoutParams params = getWindow().getAttributes();
-        params.height = ViewGroup.LayoutParams.MATCH_PARENT;
         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
         params.gravity = Gravity.TOP | Gravity.LEFT;
-        params.flags |= WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
-        params.dimAmount = 0;
-        params.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
-        if (Build.VERSION.SDK_INT >= 21) {
-            params.flags |= WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS;
-            params.type = WindowManager.LayoutParams.TYPE_SYSTEM_ERROR;
+        if (!focusable) {
+            params.flags |= WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+            params.dimAmount = 0;
+            params.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+        } else {
+            params.dimAmount = 0.2f;
+        }
+        if (Build.VERSION.SDK_INT < 21) {
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT;
         }
         getWindow().setAttributes(params);
     }
@@ -434,6 +460,9 @@ public class BottomSheet extends Dialog {
     @Override
     public void show() {
         super.show();
+        if (focusable) {
+            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        }
         dismissed = false;
         if (Build.VERSION.SDK_INT >= 21 || !useRevealAnimation) {
             containerView.setBackgroundDrawable(shadowDrawable);
@@ -590,7 +619,7 @@ public class BottomSheet extends Dialog {
             AnimatorSetProxy animatorSetProxy = new AnimatorSetProxy();
             animatorSetProxy.playTogether(
                     ObjectAnimatorProxy.ofFloat(containerView, "translationY", 0),
-                    ObjectAnimatorProxy.ofInt(backgroundDrawable, "alpha", 51));
+                    ObjectAnimatorProxy.ofInt(backgroundDrawable, "alpha", focusable ? 0 : 51));
             animatorSetProxy.setDuration(200);
             animatorSetProxy.setStartDelay(20);
             animatorSetProxy.setInterpolator(new DecelerateInterpolator());
@@ -716,7 +745,11 @@ public class BottomSheet extends Dialog {
         private BottomSheet bottomSheet;
 
         public Builder(Context context) {
-            bottomSheet = new BottomSheet(context);
+            bottomSheet = new BottomSheet(context, false);
+        }
+
+        public Builder(Context context, boolean needFocus) {
+            bottomSheet = new BottomSheet(context, needFocus);
         }
 
         public Builder setItems(CharSequence[] items, final OnClickListener onClickListener) {

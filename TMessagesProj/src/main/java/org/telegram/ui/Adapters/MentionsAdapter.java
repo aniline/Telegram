@@ -1,5 +1,5 @@
 /*
- * This is the source code of Telegram for Android v. 2.x
+ * This is the source code of Telegram for Android v. 3.x.x
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
@@ -12,10 +12,10 @@ import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
 
-import org.telegram.android.MessageObject;
-import org.telegram.android.MessagesController;
-import org.telegram.android.UserObject;
-import org.telegram.messenger.TLRPC;
+import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.UserObject;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Cells.MentionCell;
 
 import java.util.ArrayList;
@@ -30,7 +30,7 @@ public class MentionsAdapter extends BaseSearchAdapter {
     }
 
     private Context mContext;
-    private TLRPC.ChatParticipants info;
+    private TLRPC.ChatFull info;
     private ArrayList<TLRPC.User> searchResultUsernames;
     private ArrayList<String> searchResultHashtags;
     private ArrayList<String> searchResultCommands;
@@ -53,7 +53,7 @@ public class MentionsAdapter extends BaseSearchAdapter {
         this.isDarkTheme = isDarkTheme;
     }
 
-    public void setChatInfo(TLRPC.ChatParticipants chatParticipants) {
+    public void setChatInfo(TLRPC.ChatFull chatParticipants) {
         info = chatParticipants;
         if (lastText != null) {
             searchUsernameOrHashtag(lastText, lastPosition, messages);
@@ -166,13 +166,16 @@ public class MentionsAdapter extends BaseSearchAdapter {
             }
             String usernameString = result.toString().toLowerCase();
             ArrayList<TLRPC.User> newResult = new ArrayList<>();
-            for (TLRPC.TL_chatParticipant chatParticipant : info.participants) {
-                TLRPC.User user = MessagesController.getInstance().getUser(chatParticipant.user_id);
-                if (user == null || UserObject.isUserSelf(user)) {
-                    continue;
-                }
-                if (user.username != null && user.username.length() > 0 && (usernameString.length() > 0 && user.username.toLowerCase().startsWith(usernameString) || usernameString.length() == 0)) {
-                    newResult.add(user);
+            if (info.participants != null) {
+                for (int a = 0; a < info.participants.participants.size(); a++) {
+                    TLRPC.ChatParticipant chatParticipant = info.participants.participants.get(a);
+                    TLRPC.User user = MessagesController.getInstance().getUser(chatParticipant.user_id);
+                    if (user == null || UserObject.isUserSelf(user)) {
+                        continue;
+                    }
+                    if (user.username != null && user.username.length() > 0 && (usernameString.length() > 0 && user.username.toLowerCase().startsWith(usernameString) || usernameString.length() == 0)) {
+                        newResult.add(user);
+                    }
                 }
             }
             searchResultHashtags = null;
@@ -218,11 +221,13 @@ public class MentionsAdapter extends BaseSearchAdapter {
             ArrayList<TLRPC.User> newResultUsers = new ArrayList<>();
             String command = result.toString().toLowerCase();
             for (HashMap.Entry<Integer, TLRPC.BotInfo> entry : botInfo.entrySet()) {
-                for (TLRPC.TL_botCommand botCommand : entry.getValue().commands) {
+                TLRPC.BotInfo botInfo = entry.getValue();
+                for (int a = 0; a < botInfo.commands.size(); a++) {
+                    TLRPC.TL_botCommand botCommand = botInfo.commands.get(a);
                     if (botCommand != null && botCommand.command != null && botCommand.command.startsWith(command)) {
                         newResult.add("/" + botCommand.command);
                         newResultHelp.add(botCommand.description);
-                        newResultUsers.add(MessagesController.getInstance().getUser(entry.getValue().user_id));
+                        newResultUsers.add(MessagesController.getInstance().getUser(botInfo.user_id));
                     }
                 }
             }
@@ -309,8 +314,12 @@ public class MentionsAdapter extends BaseSearchAdapter {
             if (i < 0 || i >= searchResultCommands.size()) {
                 return null;
             }
-            if (searchResultCommandsUsers != null && botsCount != 1) {
-                return String.format("%s@%s", searchResultCommands.get(i), searchResultCommandsUsers.get(i).username);
+            if (searchResultCommandsUsers != null && (botsCount != 1 || info instanceof TLRPC.TL_channelFull)) {
+                if (searchResultCommandsUsers.get(i) != null) {
+                    return String.format("%s@%s", searchResultCommands.get(i), searchResultCommandsUsers.get(i) != null ? searchResultCommandsUsers.get(i).username : "");
+                } else {
+                    return String.format("%s", searchResultCommands.get(i));
+                }
             }
             return searchResultCommands.get(i);
         }
@@ -336,7 +345,7 @@ public class MentionsAdapter extends BaseSearchAdapter {
         } else if (searchResultHashtags != null) {
             ((MentionCell) view).setText(searchResultHashtags.get(i));
         }  else if (searchResultCommands != null) {
-            ((MentionCell) view).setBotCommand(searchResultCommands.get(i), searchResultCommandsHelp.get(i), searchResultCommandsUsers.get(i));
+            ((MentionCell) view).setBotCommand(searchResultCommands.get(i), searchResultCommandsHelp.get(i), searchResultCommandsUsers != null ? searchResultCommandsUsers.get(i) : null);
         }
         return view;
     }

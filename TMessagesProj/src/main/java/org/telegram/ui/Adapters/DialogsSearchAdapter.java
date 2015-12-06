@@ -1,9 +1,9 @@
 /*
- * This is the source code of Telegram for Android v. 1.7.x.
+ * This is the source code of Telegram for Android v. 3.x.x.
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2014.
+ * Copyright Nikolai Kudashov, 2013-2015.
  */
 
 package org.telegram.ui.Adapters;
@@ -15,20 +15,21 @@ import android.view.ViewGroup;
 
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLitePreparedStatement;
-import org.telegram.android.AndroidUtilities;
-import org.telegram.android.ContactsController;
-import org.telegram.android.LocaleController;
-import org.telegram.android.MessageObject;
-import org.telegram.android.MessagesController;
-import org.telegram.android.MessagesStorage;
-import org.telegram.android.support.widget.RecyclerView;
-import org.telegram.messenger.ByteBufferDesc;
-import org.telegram.messenger.ConnectionsManager;
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ContactsController;
+import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
-import org.telegram.messenger.RPCRequest;
-import org.telegram.messenger.TLObject;
-import org.telegram.messenger.TLRPC;
+import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.NativeByteBuffer;
+import org.telegram.tgnet.RequestDelegate;
+import org.telegram.tgnet.TLObject;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Cells.DialogCell;
 import org.telegram.ui.Cells.GreySectionCell;
 import org.telegram.ui.Cells.HashtagSearchCell;
@@ -52,7 +53,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
     private ArrayList<MessageObject> searchResultMessages = new ArrayList<>();
     private ArrayList<String> searchResultHashtags = new ArrayList<>();
     private String lastSearchText;
-    private long reqId = 0;
+    private int reqId = 0;
     private int lastReqId;
     private MessagesActivitySearchAdapterDelegate delegate;
     private int needMessagesSearch;
@@ -111,11 +112,11 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
     }
 
     private void searchMessagesInternal(final String query) {
-        if (needMessagesSearch == 0) {
+        if (needMessagesSearch == 0 || (lastMessagesSearchString == null || lastMessagesSearchString.length() == 0) && (query == null || query.length() == 0)) {
             return;
         }
         if (reqId != 0) {
-            ConnectionsManager.getInstance().cancelRpc(reqId, true);
+            ConnectionsManager.getInstance().cancelRequest(reqId, true);
             reqId = 0;
         }
         if (query == null || query.length() == 0) {
@@ -128,20 +129,34 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
             }
             return;
         }
-        final TLRPC.TL_messages_search req = new TLRPC.TL_messages_search();
+
+        final TLRPC.TL_messages_searchGlobal req = new TLRPC.TL_messages_searchGlobal();
         req.limit = 20;
-        req.peer = new TLRPC.TL_inputPeerEmpty();
         req.q = query;
         if (lastMessagesSearchString != null && query.equals(lastMessagesSearchString) && !searchResultMessages.isEmpty()) {
-            req.max_id = searchResultMessages.get(searchResultMessages.size() - 1).getId();
+            MessageObject lastMessage = searchResultMessages.get(searchResultMessages.size() - 1);
+            req.offset_id = lastMessage.getId();
+            req.offset_date = lastMessage.messageOwner.date;
+            int id;
+            if (lastMessage.messageOwner.to_id.channel_id != 0) {
+                id = -lastMessage.messageOwner.to_id.channel_id;
+            } else if (lastMessage.messageOwner.to_id.chat_id != 0) {
+                id = -lastMessage.messageOwner.to_id.chat_id;
+            } else {
+                id = lastMessage.messageOwner.to_id.user_id;
+            }
+            req.offset_peer = MessagesController.getInputPeer(id);
+        } else {
+            req.offset_date = 0;
+            req.offset_id = 0;
+            req.offset_peer = new TLRPC.TL_inputPeerEmpty();
         }
         lastMessagesSearchString = query;
-        req.filter = new TLRPC.TL_inputMessagesFilterEmpty();
         final int currentReqId = ++lastReqId;
         if (delegate != null) {
             delegate.searchStateChanged(true);
         }
-        reqId = ConnectionsManager.getInstance().performRpc(req, new RPCRequest.RPCRequestDelegate() {
+        reqId = ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
             @Override
             public void run(final TLObject response, final TLRPC.TL_error error) {
                 AndroidUtilities.runOnUIThread(new Runnable() {
@@ -153,7 +168,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                 MessagesStorage.getInstance().putUsersAndChats(res.users, res.chats, true, true);
                                 MessagesController.getInstance().putUsers(res.users, false);
                                 MessagesController.getInstance().putChats(res.chats, false);
-                                if (req.max_id == 0) {
+                                if (req.offset_id == 0) {
                                     searchResultMessages.clear();
                                 }
                                 for (TLRPC.Message message : res.messages) {
@@ -170,7 +185,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                     }
                 });
             }
-        }, true, RPCRequest.RPCRequestClassGeneric | RPCRequest.RPCRequestClassFailOnServerErrors);
+        }, ConnectionsManager.RequestFlagFailOnServerErrors);
     }
 
     public boolean hasRecentRearch() {
@@ -178,10 +193,10 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
     }
 
     public boolean isRecentSearchDisplayed() {
-        return (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty();
+        return needMessagesSearch != 2 && (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty();
     }
 
-    private void loadRecentSearch() {
+    public void loadRecentSearch() {
         MessagesStorage.getInstance().getStorageQueue().postRunnable(new Runnable() {
             @Override
             public void run() {
@@ -258,7 +273,14 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                             } else {
                                 did = AndroidUtilities.makeBroadcastId(chat.id);
                             }
-                            hashMap.get(did).object = chat;
+                            if (chat.migrated_to != null) {
+                                RecentSearchObject recentSearchObject = hashMap.remove(did);
+                                if (recentSearchObject != null) {
+                                    arrayList.remove(recentSearchObject);
+                                }
+                            } else {
+                                hashMap.get(did).object = chat;
+                            }
                         }
                     }
 
@@ -391,7 +413,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                     int resultCount = 0;
 
                     HashMap<Long, DialogSearchResult> dialogsResult = new HashMap<>();
-                    SQLiteCursor cursor = MessagesStorage.getInstance().getDatabase().queryFinalized("SELECT did, date FROM dialogs ORDER BY date DESC LIMIT 200");
+                    SQLiteCursor cursor = MessagesStorage.getInstance().getDatabase().queryFinalized("SELECT did, date FROM dialogs ORDER BY date DESC LIMIT 400");
                     while (cursor.next()) {
                         long id = cursor.longValue(0);
                         DialogSearchResult dialogSearchResult = new DialogSearchResult();
@@ -445,8 +467,8 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                     found = 2;
                                 }
                                 if (found != 0) {
-                                    ByteBufferDesc data = MessagesStorage.getInstance().getBuffersStorage().getFreeBuffer(cursor.byteArrayLength(0));
-                                    if (data != null && cursor.byteBufferValue(0, data.buffer) != 0) {
+                                    NativeByteBuffer data = new NativeByteBuffer(cursor.byteArrayLength(0));
+                                    if (data != null && cursor.byteBufferValue(0, data) != 0) {
                                         TLRPC.User user = TLRPC.User.TLdeserialize(data, data.readInt32(false), false);
                                         DialogSearchResult dialogSearchResult = dialogsResult.get((long) user.id);
                                         if (user.status != null) {
@@ -460,7 +482,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                         dialogSearchResult.object = user;
                                         resultCount++;
                                     }
-                                    MessagesStorage.getInstance().getBuffersStorage().reuseFreeBuffer(data);
+                                    data.reuse();
                                     break;
                                 }
                             }
@@ -478,21 +500,23 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                             }
                             for (String q : search) {
                                 if (name.startsWith(q) || name.contains(" " + q) || tName != null && (tName.startsWith(q) || tName.contains(" " + q))) {
-                                    ByteBufferDesc data = MessagesStorage.getInstance().getBuffersStorage().getFreeBuffer(cursor.byteArrayLength(0));
-                                    if (data != null && cursor.byteBufferValue(0, data.buffer) != 0) {
+                                    NativeByteBuffer data = new NativeByteBuffer(cursor.byteArrayLength(0));
+                                    if (data != null && cursor.byteBufferValue(0, data) != 0) {
                                         TLRPC.Chat chat = TLRPC.Chat.TLdeserialize(data, data.readInt32(false), false);
-                                        long dialog_id;
-                                        if (chat.id > 0) {
-                                            dialog_id = -chat.id;
-                                        } else {
-                                            dialog_id = AndroidUtilities.makeBroadcastId(chat.id);
+                                        if (!(chat == null || chat.deactivated || ChatObject.isChannel(chat) && ChatObject.isNotInChat(chat))) {
+                                            long dialog_id;
+                                            if (chat.id > 0) {
+                                                dialog_id = -chat.id;
+                                            } else {
+                                                dialog_id = AndroidUtilities.makeBroadcastId(chat.id);
+                                            }
+                                            DialogSearchResult dialogSearchResult = dialogsResult.get(dialog_id);
+                                            dialogSearchResult.name = AndroidUtilities.generateSearchName(chat.title, null, q);
+                                            dialogSearchResult.object = chat;
+                                            resultCount++;
                                         }
-                                        DialogSearchResult dialogSearchResult = dialogsResult.get(dialog_id);
-                                        dialogSearchResult.name = AndroidUtilities.generateSearchName(chat.title, null, q);
-                                        dialogSearchResult.object = chat;
-                                        resultCount++;
                                     }
-                                    MessagesStorage.getInstance().getBuffersStorage().reuseFreeBuffer(data);
+                                    data.reuse();
                                     break;
                                 }
                             }
@@ -523,9 +547,9 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                 }
 
                                 if (found != 0) {
-                                    ByteBufferDesc data = MessagesStorage.getInstance().getBuffersStorage().getFreeBuffer(cursor.byteArrayLength(0));
-                                    ByteBufferDesc data2 = MessagesStorage.getInstance().getBuffersStorage().getFreeBuffer(cursor.byteArrayLength(6));
-                                    if (data != null && cursor.byteBufferValue(0, data.buffer) != 0 && cursor.byteBufferValue(6, data2.buffer) != 0) {
+                                    NativeByteBuffer data = new NativeByteBuffer(cursor.byteArrayLength(0));
+                                    NativeByteBuffer data2 = new NativeByteBuffer(cursor.byteArrayLength(6));
+                                    if (data != null && cursor.byteBufferValue(0, data) != 0 && cursor.byteBufferValue(6, data2) != 0) {
                                         TLRPC.EncryptedChat chat = TLRPC.EncryptedChat.TLdeserialize(data, data.readInt32(false), false);
                                         DialogSearchResult dialogSearchResult = dialogsResult.get((long) chat.id << 32);
 
@@ -558,8 +582,8 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                         encUsers.add(user);
                                         resultCount++;
                                     }
-                                    MessagesStorage.getInstance().getBuffersStorage().reuseFreeBuffer(data);
-                                    MessagesStorage.getInstance().getBuffersStorage().reuseFreeBuffer(data2);
+                                    data.reuse();
+                                    data2.reuse();
                                     break;
                                 }
                             }
@@ -589,7 +613,8 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                     ArrayList<TLObject> resultArray = new ArrayList<>();
                     ArrayList<CharSequence> resultArrayNames = new ArrayList<>();
 
-                    for (DialogSearchResult dialogSearchResult : searchResults) {
+                    for (int a = 0; a < searchResults.size(); a++) {
+                        DialogSearchResult dialogSearchResult = searchResults.get(a);
                         resultArray.add(dialogSearchResult.object);
                         resultArrayNames.add(dialogSearchResult.name);
                     }
@@ -619,8 +644,8 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                     found = 2;
                                 }
                                 if (found != 0) {
-                                    ByteBufferDesc data = MessagesStorage.getInstance().getBuffersStorage().getFreeBuffer(cursor.byteArrayLength(0));
-                                    if (data != null && cursor.byteBufferValue(0, data.buffer) != 0) {
+                                    NativeByteBuffer data = new NativeByteBuffer(cursor.byteArrayLength(0));
+                                    if (data != null && cursor.byteBufferValue(0, data) != 0) {
                                         TLRPC.User user = TLRPC.User.TLdeserialize(data, data.readInt32(false), false);
                                         if (user.status != null) {
                                             user.status.expires = cursor.intValue(1);
@@ -632,7 +657,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                         }
                                         resultArray.add(user);
                                     }
-                                    MessagesStorage.getInstance().getBuffersStorage().reuseFreeBuffer(data);
+                                    data.reuse();
                                     break;
                                 }
                             }
@@ -719,7 +744,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
             searchResultNames.clear();
             searchResultHashtags.clear();
             if (needMessagesSearch != 2) {
-                queryServerSearch(null);
+                queryServerSearch(null, true);
             }
             searchMessagesInternal(null);
             notifyDataSetChanged();
@@ -764,7 +789,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                         @Override
                         public void run() {
                             if (needMessagesSearch != 2) {
-                                queryServerSearch(query);
+                                queryServerSearch(query, true);
                             }
                             searchMessagesInternal(query);
                         }
@@ -776,7 +801,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
 
     @Override
     public int getItemCount() {
-        if ((lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
+        if (needMessagesSearch != 2 && (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
             return recentSearchObjects.size() + 1;
         }
         if (!searchResultHashtags.isEmpty()) {
@@ -795,9 +820,21 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
     }
 
     public Object getItem(int i) {
-        if ((lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
+        if (needMessagesSearch != 2 && (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
             if (i > 0 && i - 1 < recentSearchObjects.size()) {
-                return recentSearchObjects.get(i - 1).object;
+                TLObject object = recentSearchObjects.get(i - 1).object;
+                if (object instanceof TLRPC.User) {
+                    TLRPC.User user = MessagesController.getInstance().getUser(((TLRPC.User) object).id);
+                    if (user != null) {
+                        object = user;
+                    }
+                } else if (object instanceof TLRPC.Chat) {
+                    TLRPC.Chat chat = MessagesController.getInstance().getChat(((TLRPC.Chat) object).id);
+                    if (chat != null) {
+                        object = chat;
+                    }
+                }
+                return object;
             } else {
                 return null;
             }
@@ -863,18 +900,24 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                 CharSequence username = null;
                 CharSequence name = null;
                 boolean isRecent = false;
+                String un = null;
                 Object obj = getItem(position);
 
                 if (obj instanceof TLRPC.User) {
                     user = (TLRPC.User) obj;
+                    un = user.username;
                 } else if (obj instanceof TLRPC.Chat) {
                     chat = MessagesController.getInstance().getChat(((TLRPC.Chat) obj).id);
+                    if (chat == null) {
+                        chat = (TLRPC.Chat) obj;
+                    }
+                    un = chat.username;
                 } else if (obj instanceof TLRPC.EncryptedChat) {
                     encryptedChat = MessagesController.getInstance().getEncryptedChat(((TLRPC.EncryptedChat) obj).id);
                     user = MessagesController.getInstance().getUser(encryptedChat.user_id);
                 }
 
-                if ((lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
+                if (needMessagesSearch != 2 && (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
                     isRecent = true;
                     cell.useSeparator = position != getItemCount() - 1;
                 } else {
@@ -890,25 +933,25 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
                                 name = null;
                             }
                         }
-                    } else if (position > searchResult.size() && user != null && user.username != null) {
+                    } else if (position > searchResult.size() && un != null) {
                         String foundUserName = lastFoundUsername;
                         if (foundUserName.startsWith("@")) {
                             foundUserName = foundUserName.substring(1);
                         }
                         try {
-                            username = AndroidUtilities.replaceTags(String.format("<c#ff4d83b3>@%s</c>%s", user.username.substring(0, foundUserName.length()), user.username.substring(foundUserName.length())));
+                            username = AndroidUtilities.replaceTags(String.format("<c#ff4d83b3>@%s</c>%s", un.substring(0, foundUserName.length()), un.substring(foundUserName.length())));
                         } catch (Exception e) {
-                            username = user.username;
+                            username = un;
                             FileLog.e("tmessages", e);
                         }
                     }
                 }
-                cell.setData(user, chat, encryptedChat, name, username, isRecent);
+                cell.setData(user != null ? user : chat, encryptedChat, name, username, isRecent);
                 break;
             }
             case 1: {
                 GreySectionCell cell = (GreySectionCell) holder.itemView;
-                if ((lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
+                if (needMessagesSearch != 2 && (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
                     cell.setText(LocaleController.getString("Recent", R.string.Recent).toUpperCase());
                 } else if (!searchResultHashtags.isEmpty()) {
                     cell.setText(LocaleController.getString("Hashtags", R.string.Hashtags).toUpperCase());
@@ -940,7 +983,7 @@ public class DialogsSearchAdapter extends BaseSearchAdapterRecycler {
 
     @Override
     public int getItemViewType(int i) {
-        if ((lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
+        if (needMessagesSearch != 2 && (lastSearchText == null || lastSearchText.length() == 0) && !recentSearchObjects.isEmpty()) {
             return i == 0 ? 1 : 0;
         }
         if (!searchResultHashtags.isEmpty()) {

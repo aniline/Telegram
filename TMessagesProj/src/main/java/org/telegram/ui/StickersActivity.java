@@ -1,9 +1,9 @@
 /*
- * This is the source code of Telegram for Android v. 2.x.x.
+ * This is the source code of Telegram for Android v. 3.x.x.
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2014.
+ * Copyright Nikolai Kudashov, 2013-2015.
  */
 
 package org.telegram.ui;
@@ -23,14 +23,14 @@ import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import org.telegram.android.LocaleController;
-import org.telegram.android.MessagesController;
-import org.telegram.android.NotificationCenter;
-import org.telegram.android.query.StickersQuery;
+import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.query.StickersQuery;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
-import org.telegram.messenger.TLRPC;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.Adapters.BaseFragmentAdapter;
@@ -105,7 +105,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
                     }
                     StickersAlert alert = new StickersAlert(getParentActivity(), stickerSet);
                     alert.setButton(AlertDialog.BUTTON_NEGATIVE, LocaleController.getString("Close", R.string.Close), (Message) null);
-                    if ((stickerSet.set.flags & 4) == 0) {
+                    if (!stickerSet.set.official) {
                         alert.setButton(AlertDialog.BUTTON_NEUTRAL, LocaleController.getString("StickersRemove", R.string.StickersRemove), new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
@@ -193,7 +193,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 
         private void processSelectionOption(int which, TLRPC.TL_messages_stickerSet stickerSet) {
             if (which == 0) {
-                StickersQuery.removeStickersSet(getParentActivity(), stickerSet.set, (stickerSet.set.flags & 2) == 0 ? 1 : 2);
+                StickersQuery.removeStickersSet(getParentActivity(), stickerSet.set, !stickerSet.set.disabled ? 1 : 2);
             } else if (which == 1) {
                 StickersQuery.removeStickersSet(getParentActivity(), stickerSet.set, 0);
             } else if (which == 2) {
@@ -238,17 +238,17 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
                             builder.setTitle(stickerSet.set.title);
                             CharSequence[] items;
                             final int[] options;
-                            if ((stickerSet.set.flags & 4) != 0) {
+                            if (stickerSet.set.official) {
                                 options = new int[]{0, 2, 3};
                                 items = new CharSequence[]{
-                                        (stickerSet.set.flags & 2) == 0 ? LocaleController.getString("StickersHide", R.string.StickersHide) : LocaleController.getString("StickersShow", R.string.StickersShow),
+                                        !stickerSet.set.disabled ? LocaleController.getString("StickersHide", R.string.StickersHide) : LocaleController.getString("StickersShow", R.string.StickersShow),
                                         LocaleController.getString("StickersShare", R.string.StickersShare),
                                         LocaleController.getString("StickersCopy", R.string.StickersCopy),
                                 };
                             } else {
                                 options = new int[]{0, 1, 2, 3};
                                 items = new CharSequence[]{
-                                        (stickerSet.set.flags & 2) == 0 ? LocaleController.getString("StickersHide", R.string.StickersHide) : LocaleController.getString("StickersShow", R.string.StickersShow),
+                                        !stickerSet.set.disabled ? LocaleController.getString("StickersHide", R.string.StickersHide) : LocaleController.getString("StickersShow", R.string.StickersShow),
                                         LocaleController.getString("StickersRemove", R.string.StickersRemove),
                                         LocaleController.getString("StickersShare", R.string.StickersShare),
                                         LocaleController.getString("StickersCopy", R.string.StickersCopy),
