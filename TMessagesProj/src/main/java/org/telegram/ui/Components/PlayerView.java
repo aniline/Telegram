@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -32,6 +32,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.AudioPlayerActivity;
 
 public class PlayerView extends FrameLayout implements NotificationCenter.NotificationCenterDelegate {
@@ -54,7 +55,7 @@ public class PlayerView extends FrameLayout implements NotificationCenter.Notifi
 
         setTag(1);
         FrameLayout frameLayout = new FrameLayout(context);
-        frameLayout.setBackgroundColor(0xffffffff);
+        frameLayout.setBackgroundColor(Theme.INAPP_PLAYER_BACKGROUND_COLOR);
         addView(frameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 36, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
 
         View shadow = new View(context);
@@ -76,7 +77,7 @@ public class PlayerView extends FrameLayout implements NotificationCenter.Notifi
         });
 
         titleTextView = new TextView(context);
-        titleTextView.setTextColor(0xff212121);
+        titleTextView.setTextColor(Theme.INAPP_PLAYER_TITLE_TEXT_COLOR);
         titleTextView.setMaxLines(1);
         titleTextView.setLines(1);
         titleTextView.setSingleLine(true);
@@ -99,7 +100,8 @@ public class PlayerView extends FrameLayout implements NotificationCenter.Notifi
         setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (fragment != null) {
+                MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
+                if (messageObject != null && messageObject.isMusic() && fragment != null) {
                     fragment.presentFragment(new AudioPlayerActivity());
                 }
             }
@@ -158,13 +160,15 @@ public class PlayerView extends FrameLayout implements NotificationCenter.Notifi
                 create = true;
             }
         }
-        if (messageObject == null || !messageObject.isMusic()) {
+        if (messageObject == null || messageObject.getId() == 0/* || !messageObject.isMusic()*/) {
             lastMessageObject = null;
             if (visible) {
                 visible = false;
-                if (create && topPadding != 0) {
+                if (create) {
                     clearAnimation();
-                    setVisibility(GONE);
+                    if (getVisibility() != GONE) {
+                        setVisibility(GONE);
+                    }
                     setTopPadding(0);
                 } else {
                     if (animatorSet != null) {
@@ -224,8 +228,15 @@ public class PlayerView extends FrameLayout implements NotificationCenter.Notifi
             }
             if (lastMessageObject != messageObject) {
                 lastMessageObject = messageObject;
-                SpannableStringBuilder stringBuilder = new SpannableStringBuilder(String.format("%s - %s", messageObject.getMusicAuthor(), messageObject.getMusicTitle()));
-                TypefaceSpan span = new TypefaceSpan(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+                SpannableStringBuilder stringBuilder;
+                if (lastMessageObject.isVoice()) {
+                    stringBuilder = new SpannableStringBuilder(String.format("%s %s", messageObject.getMusicAuthor(), messageObject.getMusicTitle()));
+                    titleTextView.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+                } else {
+                    stringBuilder = new SpannableStringBuilder(String.format("%s - %s", messageObject.getMusicAuthor(), messageObject.getMusicTitle()));
+                    titleTextView.setEllipsize(TextUtils.TruncateAt.END);
+                }
+                TypefaceSpan span = new TypefaceSpan(AndroidUtilities.getTypeface("fonts/rmedium.ttf"), 0, Theme.INAPP_PLAYER_PERFORMER_TEXT_COLOR);
                 stringBuilder.setSpan(span, 0, messageObject.getMusicAuthor().length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
                 titleTextView.setText(stringBuilder);
             }

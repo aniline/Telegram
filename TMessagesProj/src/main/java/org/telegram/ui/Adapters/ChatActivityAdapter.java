@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Adapters;
@@ -202,7 +202,7 @@ public class ChatActivityAdapter {
                                         Intent intent = new Intent(Intent.ACTION_VIEW);
                                         if (message.type == 8 || message.type == 9) {
                                             MimeTypeMap myMime = MimeTypeMap.getSingleton();
-                                            int idx = fileName.lastIndexOf(".");
+                                            int idx = fileName.lastIndexOf('.');
                                             if (idx != -1) {
                                                 String ext = fileName.substring(idx + 1);
                                                 realMimeType = myMime.getMimeTypeFromExtension(ext.toLowerCase());

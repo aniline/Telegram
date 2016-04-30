@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Cells;
@@ -358,10 +358,10 @@ public class DialogCell extends BaseCell {
         } else {
             TLRPC.User fromUser = null;
             TLRPC.Chat fromChat = null;
-            if (message.messageOwner.from_id > 0) {
+            if (message.isFromUser()) {
                 fromUser = MessagesController.getInstance().getUser(message.messageOwner.from_id);
-            } else if (message.messageOwner.from_id < 0) {
-                fromChat = MessagesController.getInstance().getChat(-message.messageOwner.from_id);
+            } else {
+                fromChat = MessagesController.getInstance().getChat(message.messageOwner.to_id.channel_id);
             }
 
             if (lastMessageDate != 0) {
@@ -395,7 +395,7 @@ public class DialogCell extends BaseCell {
                             if (mess.length() > 150) {
                                 mess = mess.substring(0, 150);
                             }
-                            mess = mess.replace("\n", " ");
+                            mess = mess.replace('\n', ' ');
                             messageString = Emoji.replaceEmoji(AndroidUtilities.replaceTags(String.format("<c#ff4d83b3>%s:</c> <c#ff808080>%s</c>", name.replace("\n", ""), mess), AndroidUtilities.FLAG_TAG_COLOR), messagePaint.getFontMetricsInt(), AndroidUtilities.dp(20), false);
                         } else {
                             if (message.messageOwner.media != null && !message.isMediaEmpty()) {
@@ -407,7 +407,7 @@ public class DialogCell extends BaseCell {
                                     if (mess.length() > 150) {
                                         mess = mess.substring(0, 150);
                                     }
-                                    mess = mess.replace("\n", " ");
+                                    mess = mess.replace('\n', ' ');
                                     messageString = Emoji.replaceEmoji(AndroidUtilities.replaceTags(String.format("<c#ff4d83b3>%s:</c> <c#ff808080>%s</c>", name.replace("\n", ""), mess), AndroidUtilities.FLAG_TAG_COLOR), messagePaint.getFontMetricsInt(), AndroidUtilities.dp(20), false);
                                 }
                             }
@@ -559,7 +559,7 @@ public class DialogCell extends BaseCell {
         }
 
         nameWidth = Math.max(AndroidUtilities.dp(12), nameWidth);
-        CharSequence nameStringFinal = TextUtils.ellipsize(nameString.replace("\n", " "), currentNamePaint, nameWidth - AndroidUtilities.dp(12), TextUtils.TruncateAt.END);
+        CharSequence nameStringFinal = TextUtils.ellipsize(nameString.replace('\n', ' '), currentNamePaint, nameWidth - AndroidUtilities.dp(12), TextUtils.TruncateAt.END);
         try {
             nameLayout = new StaticLayout(nameStringFinal, currentNamePaint, nameWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
         } catch (Exception e) {
@@ -609,7 +609,7 @@ public class DialogCell extends BaseCell {
             if (mess.length() > 150) {
                 mess = mess.substring(0, 150);
             }
-            mess = mess.replace("\n", " ");
+            mess = mess.replace('\n', ' ');
             messageString = Emoji.replaceEmoji(mess, messagePaint.getFontMetricsInt(), AndroidUtilities.dp(17), false);
         }
         messageWidth = Math.max(AndroidUtilities.dp(12), messageWidth);
@@ -859,7 +859,11 @@ public class DialogCell extends BaseCell {
         if (messageLayout != null) {
             canvas.save();
             canvas.translate(messageLeft, messageTop);
-            messageLayout.draw(canvas);
+            try {
+                messageLayout.draw(canvas);
+            } catch (Exception e) {
+                FileLog.e("tmessages", e);
+            }
             canvas.restore();
         }
 

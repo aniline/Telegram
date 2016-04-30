@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -23,7 +23,7 @@ import org.telegram.messenger.FileLog;
 
 public class LetterDrawable extends Drawable {
 
-    private static Paint paint = new Paint();
+    public static Paint paint = new Paint();
     private static TextPaint namePaint;
 
     private StaticLayout textLayout;
@@ -36,7 +36,7 @@ public class LetterDrawable extends Drawable {
         super();
 
         if (namePaint == null) {
-            paint.setColor(0xffdfdfdf);
+            paint.setColor(0xfff0f0f0);
             namePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
             namePaint.setColor(0xffffffff);
             namePaint.setTextSize(AndroidUtilities.dp(28));

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
@@ -98,6 +98,8 @@ public class ContactAddActivity extends BaseFragment implements NotificationCent
                         user.last_name = lastNameField.getText().toString();
                         ContactsController.getInstance().addContact(user);
                         finishFragment();
+                        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
+                        preferences.edit().putInt("spam3_" + user_id, 1).commit();
                         NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
                     }
                 }

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.ActionBar;
@@ -85,9 +85,11 @@ public class ActionBarMenuItem extends FrameLayoutFixed {
     protected boolean overrideMenuClick;
     private boolean processedPopupClick;
 
-    public ActionBarMenuItem(Context context, ActionBarMenu menu, int background) {
+    public ActionBarMenuItem(Context context, ActionBarMenu menu, int backgroundColor) {
         super(context);
-        setBackgroundResource(background);
+        if (backgroundColor != 0) {
+            setBackgroundDrawable(Theme.createBarSelectorDrawable(backgroundColor));
+        }
         parentMenu = menu;
 
         iconView = new ImageView(context);
@@ -431,7 +433,7 @@ public class ActionBarMenuItem extends FrameLayoutFixed {
             searchField.setOnEditorActionListener(new TextView.OnEditorActionListener() {
                 @Override
                 public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-                    if (actionId == EditorInfo.IME_ACTION_SEARCH || event != null && (event.getAction() == KeyEvent.ACTION_UP && event.getKeyCode() == KeyEvent.KEYCODE_SEARCH || event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                    if (/*actionId == EditorInfo.IME_ACTION_SEARCH || */event != null && (event.getAction() == KeyEvent.ACTION_UP && event.getKeyCode() == KeyEvent.KEYCODE_SEARCH || event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
                         AndroidUtilities.hideKeyboard(searchField);
                         if (listener != null) {
                             listener.onSearchPressed(searchField);

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
@@ -63,6 +63,7 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.PopupAudioView;
 import org.telegram.ui.Components.RecordStatusDrawable;
 import org.telegram.ui.Components.SizeNotifierFrameLayout;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.TypingDotsDrawable;
 
 import java.io.File;
@@ -160,6 +161,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Theme.loadRecources(this);
 
         int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
         if (resourceId > 0) {
@@ -309,6 +311,11 @@ public class PopupNotificationActivity extends Activity implements NotificationC
             }
 
             @Override
+            public void onMessageEditEnd() {
+
+            }
+
+            @Override
             public void needSendTyping() {
                 if (currentMessageObject != null) {
                     MessagesController.getInstance().sendTyping(currentMessageObject.getDialogId(), 0, classGuid);
@@ -329,6 +336,11 @@ public class PopupNotificationActivity extends Activity implements NotificationC
             public void onWindowSizeChanged(int size) {
 
             }
+
+            @Override
+            public void onStickersTab(boolean opened) {
+
+            }
         });
 
         messageContainer = new FrameLayoutTouch(this);
@@ -337,8 +349,8 @@ public class PopupNotificationActivity extends Activity implements NotificationC
         actionBar = new ActionBar(this);
         actionBar.setOccupyStatusBar(false);
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setBackgroundColor(0xff54759e);
-        actionBar.setItemsBackground(R.drawable.bar_selector);
+        actionBar.setBackgroundColor(Theme.ACTION_BAR_COLOR);
+        actionBar.setItemsBackgroundColor(Theme.ACTION_BAR_SELECTOR_COLOR);
         popupContainer.addView(actionBar);
         ViewGroup.LayoutParams layoutParams = actionBar.getLayoutParams();
         layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -349,7 +361,6 @@ public class PopupNotificationActivity extends Activity implements NotificationC
         countText = (TextView) view.findViewById(R.id.count_text);
 
         avatarContainer = new FrameLayoutFixed(this);
-        avatarContainer.setBackgroundResource(R.drawable.bar_selector);
         avatarContainer.setPadding(AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4), 0);
         actionBar.addView(avatarContainer);
         FrameLayout.LayoutParams layoutParams2 = (FrameLayout.LayoutParams) avatarContainer.getLayoutParams();
@@ -388,7 +399,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
         nameTextView.setLayoutParams(layoutParams2);
 
         onlineTextView = new TextView(this);
-        onlineTextView.setTextColor(0xffd7e8f7);
+        onlineTextView.setTextColor(Theme.ACTION_BAR_SUBTITLE_COLOR);
         onlineTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         onlineTextView.setLines(1);
         onlineTextView.setMaxLines(1);

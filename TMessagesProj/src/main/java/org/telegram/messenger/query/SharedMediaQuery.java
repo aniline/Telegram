@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger.query;
@@ -56,11 +56,11 @@ public class SharedMediaQuery {
             } else if (type == MEDIA_FILE) {
                 req.filter = new TLRPC.TL_inputMessagesFilterDocument();
             } else if (type == MEDIA_AUDIO) {
-                req.filter = new TLRPC.TL_inputMessagesFilterAudio();
+                req.filter = new TLRPC.TL_inputMessagesFilterVoice();
             } else if (type == MEDIA_URL) {
                 req.filter = new TLRPC.TL_inputMessagesFilterUrl();
             } else if (type == MEDIA_MUSIC) {
-                req.filter = new TLRPC.TL_inputMessagesFilterAudioDocuments();
+                req.filter = new TLRPC.TL_inputMessagesFilterMusic();
             }
             req.q = "";
             req.peer = MessagesController.getInputPeer(lower_part);
@@ -101,11 +101,11 @@ public class SharedMediaQuery {
             } else if (type == MEDIA_FILE) {
                 req.filter = new TLRPC.TL_inputMessagesFilterDocument();
             } else if (type == MEDIA_AUDIO) {
-                req.filter = new TLRPC.TL_inputMessagesFilterAudio();
+                req.filter = new TLRPC.TL_inputMessagesFilterVoice();
             } else if (type == MEDIA_URL) {
                 req.filter = new TLRPC.TL_inputMessagesFilterUrl();
             } else if (type == MEDIA_MUSIC) {
-                req.filter = new TLRPC.TL_inputMessagesFilterAudioDocuments();
+                req.filter = new TLRPC.TL_inputMessagesFilterMusic();
             }
             req.q = "";
             req.peer = MessagesController.getInputPeer(lower_part);
@@ -144,18 +144,20 @@ public class SharedMediaQuery {
         if (message == null) {
             return -1;
         }
-        if (message.media instanceof TLRPC.TL_messageMediaPhoto || message.media instanceof TLRPC.TL_messageMediaVideo) {
+        if (message.media instanceof TLRPC.TL_messageMediaPhoto) {
             return MEDIA_PHOTOVIDEO;
         } else if (message.media instanceof TLRPC.TL_messageMediaDocument) {
-            if (MessageObject.isStickerMessage(message)) {
+            if (MessageObject.isVoiceMessage(message)) {
+                return MEDIA_AUDIO;
+            } else if (MessageObject.isVideoMessage(message)) {
+                return MEDIA_PHOTOVIDEO;
+            } else if (MessageObject.isStickerMessage(message)) {
                 return -1;
             } else if (MessageObject.isMusicMessage(message)) {
                 return MEDIA_MUSIC;
             } else {
                 return MEDIA_FILE;
             }
-        } else if (message.media instanceof TLRPC.TL_messageMediaAudio) {
-            return MEDIA_AUDIO;
         } else if (!message.entities.isEmpty()) {
             for (int a = 0; a < message.entities.size(); a++) {
                 TLRPC.MessageEntity entity = message.entities.get(a);
@@ -171,9 +173,7 @@ public class SharedMediaQuery {
         if (message instanceof TLRPC.TL_message_secret && message.media instanceof TLRPC.TL_messageMediaPhoto && message.ttl != 0 && message.ttl <= 60) {
             return false;
         } else if (message.media instanceof TLRPC.TL_messageMediaPhoto ||
-                message.media instanceof TLRPC.TL_messageMediaVideo ||
-                message.media instanceof TLRPC.TL_messageMediaDocument ||
-                message.media instanceof TLRPC.TL_messageMediaAudio) {
+                message.media instanceof TLRPC.TL_messageMediaDocument && !MessageObject.isGifDocument(message.media.document)) {
             return true;
         } else if (!message.entities.isEmpty()) {
             for (int a = 0; a < message.entities.size(); a++) {

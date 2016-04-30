@@ -120,42 +120,46 @@ public class ConnectionsManager {
             @Override
             public void run() {
                 FileLog.d("tmessages", "send request " + object + " with token = " + requestToken);
-                NativeByteBuffer buffer = new NativeByteBuffer(object.getObjectSize());
-                object.serializeToStream(buffer);
-                object.freeResources();
+                try {
+                    NativeByteBuffer buffer = new NativeByteBuffer(object.getObjectSize());
+                    object.serializeToStream(buffer);
+                    object.freeResources();
 
-                native_sendRequest(buffer.address, new RequestDelegateInternal() {
-                    @Override
-                    public void run(int response, int errorCode, String errorText) {
-                        try {
-                            TLObject resp = null;
-                            TLRPC.TL_error error = null;
-                            if (response != 0) {
-                                NativeByteBuffer buff = NativeByteBuffer.wrap(response);
-                                resp = object.deserializeResponse(buff, buff.readInt32(true), true);
-                            } else if (errorText != null) {
-                                error = new TLRPC.TL_error();
-                                error.code = errorCode;
-                                error.text = errorText;
-                                FileLog.e("tmessages", object + " got error " + error.code + " " + error.text);
-                            }
-                            FileLog.d("tmessages", "java received " + resp + " error = " + error);
-                            final TLObject finalResponse = resp;
-                            final TLRPC.TL_error finalError = error;
-                            Utilities.stageQueue.postRunnable(new Runnable() {
-                                @Override
-                                public void run() {
-                                    onComplete.run(finalResponse, finalError);
-                                    if (finalResponse != null) {
-                                        finalResponse.freeResources();
-                                    }
+                    native_sendRequest(buffer.address, new RequestDelegateInternal() {
+                        @Override
+                        public void run(int response, int errorCode, String errorText) {
+                            try {
+                                TLObject resp = null;
+                                TLRPC.TL_error error = null;
+                                if (response != 0) {
+                                    NativeByteBuffer buff = NativeByteBuffer.wrap(response);
+                                    resp = object.deserializeResponse(buff, buff.readInt32(true), true);
+                                } else if (errorText != null) {
+                                    error = new TLRPC.TL_error();
+                                    error.code = errorCode;
+                                    error.text = errorText;
+                                    FileLog.e("tmessages", object + " got error " + error.code + " " + error.text);
                                 }
-                            });
-                        } catch (Exception e) {
-                            FileLog.e("tmessages", e);
+                                FileLog.d("tmessages", "java received " + resp + " error = " + error);
+                                final TLObject finalResponse = resp;
+                                final TLRPC.TL_error finalError = error;
+                                Utilities.stageQueue.postRunnable(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        onComplete.run(finalResponse, finalError);
+                                        if (finalResponse != null) {
+                                            finalResponse.freeResources();
+                                        }
+                                    }
+                                });
+                            } catch (Exception e) {
+                                FileLog.e("tmessages", e);
+                            }
                         }
-                    }
-                }, onQuickAck, flags, datacenterId, connetionType, immediate, requestToken);
+                    }, onQuickAck, flags, datacenterId, connetionType, immediate, requestToken);
+                } catch (Exception e) {
+                    FileLog.e("tmessages", e);
+                }
             }
         });
         return requestToken;
@@ -197,8 +201,12 @@ public class ConnectionsManager {
         native_setNetworkAvailable(isNetworkOnline());
     }
 
-    public void init(int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String configPath, String logPath, int userId) {
-        native_init(version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, configPath, logPath, userId);
+    public void setPushConnectionEnabled(boolean value) {
+        native_setPushConnectionEnabled(value);
+    }
+
+    public void init(int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String configPath, String logPath, int userId, boolean enablePushConnection) {
+        native_init(version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, configPath, logPath, userId, enablePushConnection);
         checkConnection();
         BroadcastReceiver networkStateReceiver = new BroadcastReceiver() {
             @Override
@@ -338,8 +346,10 @@ public class ConnectionsManager {
             @Override
             public void run() {
                 try {
-                    getInstance().wakeLock.acquire(20000);
-                    FileLog.d("tmessages", "acquire wakelock");
+                    if (!getInstance().wakeLock.isHeld()) {
+                        getInstance().wakeLock.acquire(10000);
+                        FileLog.d("tmessages", "acquire wakelock");
+                    }
                 } catch (Exception e) {
                     FileLog.e("tmessages", e);
                 }
@@ -364,8 +374,9 @@ public class ConnectionsManager {
     public static native void native_applyDatacenterAddress(int datacenterId, String ipAddress, int port);
     public static native int native_getConnectionState();
     public static native void native_setUserId(int id);
-    public static native void native_init(int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String configPath, String logPath, int userId);
+    public static native void native_init(int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String configPath, String logPath, int userId, boolean enablePushConnection);
     public static native void native_setJava(boolean useJavaByteBuffers);
+    public static native void native_setPushConnectionEnabled(boolean value);
 
     public int generateClassGuid() {
         return lastClassGuid++;

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -57,7 +57,9 @@ public class ContactsController {
     private int loadingDeleteInfo = 0;
     private int deleteAccountTTL;
     private int loadingLastSeenInfo = 0;
+    private int loadingGroupInfo = 0;
     private ArrayList<TLRPC.PrivacyRule> privacyRules = null;
+    private ArrayList<TLRPC.PrivacyRule> groupPrivacyRules = null;
 
     public static class Contact {
         public int id;
@@ -161,6 +163,7 @@ public class ContactsController {
         loadingDeleteInfo = 0;
         deleteAccountTTL = 0;
         loadingLastSeenInfo = 0;
+        loadingGroupInfo = 0;
         privacyRules = null;
     }
 
@@ -171,15 +174,15 @@ public class ContactsController {
         if (!updatingInviteText && (inviteText == null || time + 86400 < (int)(System.currentTimeMillis() / 1000))) {
             updatingInviteText = true;
             TLRPC.TL_help_getInviteText req = new TLRPC.TL_help_getInviteText();
-            req.lang_code = LocaleController.getLocaleString(LocaleController.getInstance().getSystemDefaultLocale());
+            req.lang_code = LocaleController.getLocaleStringIso639();
             if (req.lang_code.length() == 0) {
                 req.lang_code = "en";
             }
             ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
                 @Override
                 public void run(TLObject response, TLRPC.TL_error error) {
-                    if (error == null) {
-                        final TLRPC.TL_help_inviteText res = (TLRPC.TL_help_inviteText)response;
+                    if (response != null) {
+                        final TLRPC.TL_help_inviteText res = (TLRPC.TL_help_inviteText) response;
                         if (res.message.length() != 0) {
                             AndroidUtilities.runOnUIThread(new Runnable() {
                                 @Override
@@ -1651,7 +1654,8 @@ public class ContactsController {
                     }
                 }*/
 
-                for (final TLRPC.User u : res.users) {
+                for (int a = 0; a < res.users.size(); a++) {
+                    final TLRPC.User u = res.users.get(a);
                     Utilities.phoneBookQueue.postRunnable(new Runnable() {
                         @Override
                         public void run() {
@@ -1861,6 +1865,30 @@ public class ContactsController {
                 }
             });
         }
+        if (loadingGroupInfo == 0) {
+            loadingGroupInfo = 1;
+            TLRPC.TL_account_getPrivacy req = new TLRPC.TL_account_getPrivacy();
+            req.key = new TLRPC.TL_inputPrivacyKeyChatInvite();
+            ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
+                @Override
+                public void run(final TLObject response, final TLRPC.TL_error error) {
+                    AndroidUtilities.runOnUIThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (error == null) {
+                                TLRPC.TL_account_privacyRules rules = (TLRPC.TL_account_privacyRules) response;
+                                MessagesController.getInstance().putUsers(rules.users, false);
+                                groupPrivacyRules = rules.rules;
+                                loadingGroupInfo = 2;
+                            } else {
+                                loadingGroupInfo = 0;
+                            }
+                            NotificationCenter.getInstance().postNotificationName(NotificationCenter.privacyRulesUpdated);
+                        }
+                    });
+                }
+            });
+        }
         NotificationCenter.getInstance().postNotificationName(NotificationCenter.privacyRulesUpdated);
     }
 
@@ -1880,12 +1908,24 @@ public class ContactsController {
         return loadingLastSeenInfo != 2;
     }
 
-    public ArrayList<TLRPC.PrivacyRule> getPrivacyRules() {
-        return privacyRules;
+    public boolean getLoadingGroupInfo() {
+        return loadingGroupInfo != 2;
     }
 
-    public void setPrivacyRules(ArrayList<TLRPC.PrivacyRule> rules) {
-        privacyRules = rules;
+    public ArrayList<TLRPC.PrivacyRule> getPrivacyRules(boolean isGroup) {
+        if (isGroup) {
+            return groupPrivacyRules;
+        } else {
+            return privacyRules;
+        }
+    }
+
+    public void setPrivacyRules(ArrayList<TLRPC.PrivacyRule> rules, boolean isGroup) {
+        if (isGroup) {
+            groupPrivacyRules = rules;
+        } else {
+            privacyRules = rules;
+        }
         NotificationCenter.getInstance().postNotificationName(NotificationCenter.privacyRulesUpdated);
         reloadContactsStatuses();
     }

@@ -3,15 +3,17 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Cells;
 
 import android.content.Context;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -34,6 +36,7 @@ public class ShareDialogCell extends FrameLayout {
 
     public ShareDialogCell(Context context) {
         super(context);
+        setBackgroundResource(R.drawable.list_selector);
 
         imageView = new BackupImageView(context);
         imageView.setRoundRadius(AndroidUtilities.dp(27));
@@ -59,6 +62,16 @@ public class ShareDialogCell extends FrameLayout {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(100), MeasureSpec.EXACTLY));
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (Build.VERSION.SDK_INT >= 21 && getBackground() != null) {
+            if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE) {
+                getBackground().setHotspot(event.getX(), event.getY());
+            }
+        }
+        return super.onTouchEvent(event);
     }
 
     public void setDialog(TLRPC.Dialog dialog, boolean checked, CharSequence name) {

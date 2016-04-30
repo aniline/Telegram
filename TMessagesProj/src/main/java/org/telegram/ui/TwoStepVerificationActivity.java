@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2015.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
@@ -680,8 +680,8 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         if (text == null || text.length() < 3) {
             return false;
         }
-        int dot = text.lastIndexOf(".");
-        int dog = text.lastIndexOf("@");
+        int dot = text.lastIndexOf('.');
+        int dog = text.lastIndexOf('@');
         return !(dot < 0 || dog < 0 || dot < dog);
     }
 
