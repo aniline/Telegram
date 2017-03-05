@@ -651,8 +651,12 @@ public class ContactsController {
                                         TLRPC.TL_contact contact = contactsByPhone.get(sphone);
                                         if (contact != null) {
                                             TLRPC.User user = MessagesController.getInstance().getUser(contact.user_id);
-                                            if (user == null || !TextUtils.isEmpty(user.first_name) || !TextUtils.isEmpty(user.last_name) || TextUtils.isEmpty(value.first_name) && TextUtils.isEmpty(value.last_name)) {
-                                                continue;
+                                            if (user != null) {
+                                                String firstName = user.first_name != null ? user.first_name : "";
+                                                String lastName = user.last_name != null ? user.last_name : "";
+                                                if (user != null && (firstName.equals(value.first_name) && lastName.equals(value.last_name) || TextUtils.isEmpty(value.first_name) && TextUtils.isEmpty(value.last_name))) {
+                                                    continue;
+                                                }
                                             }
                                         }
 
@@ -753,8 +757,12 @@ public class ContactsController {
                                 TLRPC.TL_contact contact = contactsByPhone.get(phone);
                                 if (contact != null) {
                                     TLRPC.User user = MessagesController.getInstance().getUser(contact.user_id);
-                                    if (user == null || !TextUtils.isEmpty(user.first_name) || !TextUtils.isEmpty(user.last_name) || TextUtils.isEmpty(value.first_name) && TextUtils.isEmpty(value.last_name)) {
-                                        continue;
+                                    if (user != null) {
+                                        String firstName = user.first_name != null ? user.first_name : "";
+                                        String lastName = user.last_name != null ? user.last_name : "";
+                                        if (user != null && (firstName.equals(value.first_name) && lastName.equals(value.last_name) || TextUtils.isEmpty(value.first_name) && TextUtils.isEmpty(value.last_name))) {
+                                            continue;
+                                        }
                                     }
                                 }
                             }
@@ -1321,7 +1329,7 @@ public class ContactsController {
             if (cursor == null || cursor.getCount() == 0) {
                 return false;
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             FileLog.e("tmessages", e);
         } finally {
             try {
